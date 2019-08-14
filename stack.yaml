@@ -1,0 +1,8 @@
+resolver: nightly-2019-07-05
+ghc-options:
+   "$locals": -fhide-source-paths
+
+packages:
+- .
+
+extra-deps: []

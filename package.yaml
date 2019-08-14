@@ -1,0 +1,92 @@
+name:                artificial-haskell-test
+version:             0.0.0.1
+github:              vlatkoB/artificial-haskell-test
+license:             BSD3
+author:              Vlatko Bašić
+maintainer:          vlatko.basic@gmail.com
+copyright:           2019 InfoVerba d.o.o.
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+
+description:         Please see the README on Github at <https://github.com/vlatkoB/artificial-haskell-test#readme>
+
+default-extensions:
+  - BangPatterns
+  - ConstraintKinds
+  - DataKinds
+  - DeriveGeneric
+  - ExistentialQuantification
+  - FlexibleContexts
+  - FlexibleInstances
+  - GeneralizedNewtypeDeriving
+  - KindSignatures
+  - LambdaCase
+  - MultiParamTypeClasses
+  - NumericUnderscores
+  - NamedWildCards
+  - NoImplicitPrelude
+  - OverloadedStrings
+  - PartialTypeSignatures
+  - RankNTypes
+  - RecordWildCards
+  - ScopedTypeVariables
+  - StandaloneDeriving
+  - TupleSections
+  - TypeApplications
+  - TypeFamilies
+  - TypeOperators
+  - ViewPatterns
+
+dependencies:
+  - base >= 4.11 && < 10
+  - classy-prelude
+  - containers
+  - directory
+  - string-conv
+
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wpartial-fields
+- -Wredundant-constraints
+- -Wmissing-exported-signatures
+- -Wmissing-home-modules
+
+library:
+  source-dirs: src
+  exposed-modules:
+    - Template
+    - World
+
+executables:
+  artificial-bin:
+    main:                Main.hs
+    source-dirs:         app
+    dependencies:
+    - artificial-haskell-test
+    - optparse-simple
+
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+
+tests:
+  artificial-test:
+    main:                Spec.hs
+    source-dirs:         test
+    dependencies:
+    - artificial-haskell-test
+    - hspec
+
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
