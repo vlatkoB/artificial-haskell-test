@@ -1,49 +1,64 @@
 module Main (main) where
 
-import ClassyPrelude    hiding (readFile)
-import Data.String.Conv (toS)
-import System.Directory (doesFileExist)
-import System.IO        (readFile)
+import           ClassyPrelude
 
-import Template         (spiralWorldTemplate)
-import World            (addCoords, calcIslandPopulation, mkWorldByTemplate, parseWorld,
-                         mkIslands)
+import qualified Data.ByteString.Char8 as BC
+import           Options.Applicative   (execParser, flag', fullDesc, header, help, helper,
+                                        info, long, progDesc, short, showDefault,
+                                        strOption, value, (<**>))
+import           System.Directory      (doesFileExist)
 
 
--- testScroll :: String
--- testScroll = "#~~~##~~#~~###~#~~##~#~#~"
+import           Template              (spiralWorldTemplate, zigZagWorldTemplate)
+import           World                 (addCoords, findLargestIsland, mkWorld,
+                                        mkWorldByTemplate, parseWorldConcurr)
 
+-- | Scroll can be processed in these ways, which should be specified in cmd line
+data ProcessType = Spiral     -- ^ use SpiralWorld template
+                 | ZigZag     -- ^ use ZigZagWorld template
+                 | NoTemplate -- ^ find coordinates in SpiralWorld by algorithm
+  deriving (Show)
+
+
+-- | Any cmd line arguments overrides config
+data Args = Args
+  { argScrollPath  :: FilePath    -- ^ config file to use
+  , argProcessType :: ProcessType -- ^ how to process the scroll
+  } deriving (Show)
+
+-- | Entry point
 main :: IO ()
 main = do
-  fNm <- getArgs <&> \case
-    (fNm:_) -> toS fNm
-    _       -> "data/the.scroll"
+  Args{..} <- execParser pInfo
 
-  b <- doesFileExist fNm
-  unless b $ error
-    "Specify scroll filename as param to this app or ensure 'data/the.scroll' exists"
+  putStrLn $ "\nProcessing '" <> pack argScrollPath <> "' scroll via "
+          <> tshow argProcessType <> " ..."
 
-  x <-
-     --   calcIslandPopulation
-       mkIslands
-    -- length
-     .  addCoords
-     . mkWorldByTemplate spiralWorldTemplate
-     .  parseWorld
-    <$> readFile fNm
-    -- <$> pure testScroll
-  print x
-  pure ()
+  doesFileExist argScrollPath >>= \case
+    False -> putStrLn noFileError
+    True  -> do
+      pw <- parseWorldConcurr =<< BC.readFile argScrollPath
+
+      let vlgs = case argProcessType of
+                   Spiral     -> addCoords $ mkWorldByTemplate spiralWorldTemplate pw
+                   ZigZag     -> addCoords $ mkWorldByTemplate zigZagWorldTemplate pw
+                   NoTemplate -> mkWorld pw
+
+      putStrLn $ "Largest population on an island is: " <> tshow (findLargestIsland vlgs)
+
+  where
+    pInfo = info (args <**> helper)
+                 (fullDesc <> progDesc "Artificial haskell test"
+                           <> header   "Artificial haskell test")
+    args = Args <$> strOption (long "scroll"  <> short 's'
+                            <> value "data/the.scroll" <> showDefault
+                            <> help "Path of the scroll file")
+                <*> (spiralP <|> zigZagP <|> noTemplateP)
+
+    spiralP     = flag' Spiral     (long "spiral"      <> help "Spiral template")
+    zigZagP     = flag' ZigZag     (long "zig-zag"     <> help "Zig-zag template")
+    noTemplateP = flag' NoTemplate (long "no-template" <> help "No template, Spiral")
 
 
--- getIt :: MonadIO m => String -> m ()
--- getIt scroll = do
---   let (spiralWorld :: World) = mkWorldByTemplate spiralWorldTemplate scroll
---       vxy = addCoords spiralWorld
---       vlgs = mkIslands vxy
---   mapM_ (putStrLn . toS) spiralWorld
-
---   putStr "DXY: " >> print vxy
---   putStr "VLG: " >> print vlgs
---   putStrLn "\nRESULT"
---   mapM_ print vlgs
+noFileError :: Text
+noFileError = "Specify scroll path or ensure 'data/the.scroll' exists"

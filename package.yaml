@@ -1,5 +1,5 @@
 name:                artificial-haskell-test
-version:             0.0.0.1
+version:             0.0.0.2
 github:              vlatkoB/artificial-haskell-test
 license:             BSD3
 author:              Vlatko Bašić
@@ -25,6 +25,7 @@ default-extensions:
   - KindSignatures
   - LambdaCase
   - MultiParamTypeClasses
+  - MultiWayIf
   - NumericUnderscores
   - NamedWildCards
   - NoImplicitPrelude
@@ -42,22 +43,22 @@ default-extensions:
 
 dependencies:
   - base >= 4.11 && < 10
+  - bytestring
   - classy-prelude
   - containers
   - directory
-  - string-conv
 
 
 ghc-options:
-- -Wall
-- -Wcompat
-- -Widentities
-- -Wincomplete-record-updates
-- -Wincomplete-uni-patterns
-- -Wpartial-fields
-- -Wredundant-constraints
-- -Wmissing-exported-signatures
-- -Wmissing-home-modules
+  - -Wall
+  - -Wcompat
+  - -Widentities
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wpartial-fields
+  - -Wredundant-constraints
+  - -Wmissing-exported-signatures
+  - -Wmissing-home-modules
 
 library:
   source-dirs: src
@@ -71,12 +72,13 @@ executables:
     source-dirs:         app
     dependencies:
     - artificial-haskell-test
-    - optparse-simple
+    - optparse-applicative
 
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -with-rtsopts=-T
 
 tests:
   artificial-test:
@@ -90,3 +92,13 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+
+
+benchmarks:
+  artificial-bench:
+    main:         Main.hs
+    source-dirs:  bench
+    dependencies:
+      - artificial-haskell-test
+      - criterion
+      - deepseq
