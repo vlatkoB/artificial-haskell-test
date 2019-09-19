@@ -5,7 +5,6 @@ module World
   , parsedWorldEqualString
 
   , parseWorld
-  , parseWorldConcurr
   , findLargestIsland
   , mkWorldByTemplate
   , mkWorld
@@ -17,7 +16,7 @@ import           ClassyPrelude
 
 import qualified Data.ByteString.Char8 as BC
 import           Data.Char             (isDigit, ord)
-import qualified Data.Map.Strict       as M
+import qualified Data.HashMap.Strict   as M
 import           GHC.Generics          (Generic)
 
 import           Template              (Coord, Template (..), mapOver, pointCoordInSpiral)
@@ -31,7 +30,7 @@ newtype World = World {unWorld :: [BC.ByteString] }
   deriving (Show, Eq, Ord, Generic)
 
 -- | Hold a scroll with parsed population
-newtype ParsedWorld = ParsedWorld {unParsedWorld :: BC.ByteString }
+newtype ParsedWorld = ParsedWorld {unParsedWorld :: String }
   deriving (Show, Eq, Ord, Generic)
 
 
@@ -43,18 +42,17 @@ type Village = (Coord, Char)
 
 -- | Map of the world containing only villages with their population and coordinates
 --   Water is not present here
-type VillageCoords = Map Coord Char
+type VillageCoords = HashMap Coord Char
 
 -- | Group of villages for an island
 type Island = [Village]
-
 
 ------------------------------------------------------------------------------------------
 -- Testing helpers
 ------------------------------------------------------------------------------------------
 
 -- | Data constructor not exported, so this one allows comparing parsed world with string
-parsedWorldEqualString :: ParsedWorld -> BC.ByteString -> Bool
+parsedWorldEqualString :: ParsedWorld -> String -> Bool
 parsedWorldEqualString (ParsedWorld a) b = a == b
 
 
@@ -74,36 +72,30 @@ islandPopulation = sum . map (toInt . snd)
 --   - ~ is water
 --   - number of ~ before # signifies the population of the village
 --   - if population larger that 9, use last digit as population
-parseWorld :: BC.ByteString -> ParsedWorld
-parseWorld = ParsedWorld . BC.reverse . snd . BC.foldl' countWaters (0 :: Int, mempty)
-
-
--- | Like `parseWorld`, but runs concurrently with 10k chunks
-parseWorldConcurr :: BC.ByteString -> IO ParsedWorld
-parseWorldConcurr = fmap (ParsedWorld . concatMap (BC.reverse . snd))
-                  . mapConcurrently (pure . BC.foldl' countWaters (0, mempty))
-                  . chunks 10000
+parseWorld :: Int -> BC.ByteString -> IO ParsedWorld
+parseWorld chunkSize = fmap (ParsedWorld . concatMap (reverse . snd))
+                     . mapConcurrently (pure . BC.foldl' countWaters (0, mempty))
+                     . chunks chunkSize
   where
     chunks n xs
       | null xs   = mempty
       | otherwise = let (ys, zs) = BC.splitAt n xs in ys : chunks n zs
 
-
--- | Count the waters and make population, or transform 0 water # to water
-countWaters :: (Int, ByteString) -> Char -> (Int, ByteString)
-countWaters (population,acc) c = do
-  let lastDigit = take 1 . reverse $ show population
-  case (readMay lastDigit, headMay lastDigit, c) of
-    (Just 0, _,     '#') -> (0,   BC.cons '~' acc)
-    (Just n, _,     '~') -> (n+1, BC.cons '~' acc)
-    (Just _, Just d,'#') -> (0,   BC.cons d   acc)
-    _                    -> error "countWaters: impossible happened"
+    -- | Count the waters and make population, or transform 0 water # to water
+    countWaters :: (Int, String) -> Char -> (Int, String)
+    countWaters (population,acc) c = do
+      let lastDigit = take 1 . reverse $ show population
+      case (readMay lastDigit, headMay lastDigit, c) of
+        (Just 0, _,     '#') -> (0,   '~' : acc)
+        (Just n, _,     '~') -> (n+1, '~' : acc)
+        (Just _, Just d,'#') -> (0,   d   : acc)
+        _                    -> error "countWaters: impossible happened"
 
 
 -- | Given the coordinates and population of each village, group villages into islands,
 --   count the population of each island and return the largest
 findLargestIsland :: VillageCoords -> Int
-findLargestIsland villageCoords = case M.lookupMin villageCoords of
+findLargestIsland villageCoords = case getFirstVlg villageCoords of
   Nothing  -> 0
   Just vlg -> do
     let (currIsland, newVC) = mkIsland villageCoords vlg
@@ -122,6 +114,10 @@ findLargestIsland villageCoords = case M.lookupMin villageCoords of
       Nothing -> (accIslands, accVC)
       Just _  -> first (accIslands <>) $ mkIsland accVC vlg
 
+    getFirstVlg m = case M.keys m of
+      (k:_) -> (k,) <$> lookup k m
+      _     -> Nothing
+
 
 -- | Get matrix of surrounding points of given point, a "circle" around it
 surroundCoords :: (Int, Int) -> [(Int, Int)]
@@ -139,11 +135,11 @@ surroundCoords (x,y) = [ (x-1, y-1),(x, y-1),(x+1, y-1)
 --   population over it. It is a left-top matrix.
 mkWorldByTemplate :: (Int -> Template) -> ParsedWorld -> World
 mkWorldByTemplate template (ParsedWorld parsedWorld) =
-  World $ parsedWorld `mapOver` ( template
-                                . ceiling @Float
-                                . sqrt
-                                . fromIntegral
-                                $ length parsedWorld)
+  World $ BC.pack parsedWorld `mapOver` ( template
+                                        . ceiling @Float
+                                        . sqrt
+                                        . fromIntegral
+                                        $ length parsedWorld)
 
 
 -- | Add to each village its coordinates and after remove any water
@@ -163,8 +159,8 @@ addCoords = mapFromList . concatMap (\(x,yv) -> mapMaybe (go x) yv)
 
 -- | Gather villages and their coordinates only in a map.
 mkWorld :: ParsedWorld -> VillageCoords
-mkWorld (ParsedWorld !parsedWorld) =
-  mapFromList . mapMaybe go . zip [1..] $! BC.unpack parsedWorld
+mkWorld (ParsedWorld parsedWorld) =
+  mapFromList . mapMaybe go $ zip [1..] parsedWorld
 
   where
     dim       = ceiling @Float . sqrt . fromIntegral $ length parsedWorld

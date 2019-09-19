@@ -12,7 +12,7 @@ import           Orphans                ()
 import           Template               (pointCoordInSpiral, spiralWorldTemplate,
                                          zigZagWorldTemplate)
 import           World                  (addCoords, findLargestIsland, mkWorld,
-                                         mkWorldByTemplate, parseWorld, parseWorldConcurr)
+                                         mkWorldByTemplate, parseWorld)
 
 
 
@@ -22,12 +22,15 @@ critCfg = defaultConfig {reportFile  = Just "artificial-haskell-test.html" }
 scrollPath :: FilePath
 scrollPath = "data/the.scroll"
 
+chunkSize :: Int
+chunkSize = 3000
+
 
 
 main :: IO ()
 main = do
   scroll <- BC.readFile scrollPath
-  pw     <- parseWorldConcurr scroll
+  pw     <- parseWorld chunkSize scroll
 
   let worldDimension = ceiling @Float . sqrt . fromIntegral $ length scroll
       spiralWorld    = force $ mkWorldByTemplate spiralWorldTemplate pw
@@ -36,10 +39,9 @@ main = do
 
   defaultMainWith critCfg [
       bgroup "parsing" [
-        bench "pure"     $ nfIO (pure $ parseWorld        scroll)
-      , bench "parallel" $ nfIO (       parseWorldConcurr scroll)
+        bench "concurrent" $ nfIO (parseWorld chunkSize scroll)
       ]
-    , bgroup "template" [
+    , bgroup "make template" [
         bench "spiral"  $ nfIO (pure $ spiralWorldTemplate worldDimension)
       , bench "zig-zag" $ nfIO (pure $ zigZagWorldTemplate worldDimension)
       ]
@@ -48,30 +50,30 @@ main = do
       , bench "addCoords"       $ nfIO (pure $ addCoords spiralWorld)
       , bench "calcPopulation"  $ nfIO (pure $ findLargestIsland spiralCoords)
       ]
-    , bgroup "world direct" [
+    , bgroup "world NO template" [
         bench "mkWorld"        $ nfIO (pure $ mkWorld pw)
       , bench "max population" $ nfIO (pure $ findLargestIsland directWorld)
       ]
     , bgroup "finding coordinates" [
-        bench "  100" $ nfIO (pure $ pointCoordInSpiral worldDimension   100)
-      , bench " 1000" $ nfIO (pure $ pointCoordInSpiral worldDimension  1000)
-      , bench "10000" $ nfIO (pure $ pointCoordInSpiral worldDimension 10000)
-      , bench "90000" $ nfIO (pure $ pointCoordInSpiral worldDimension 90000)
+        bench "      100" $ nfIO (pure $ pointCoordInSpiral worldDimension       100)
+      , bench "    1 000" $ nfIO (pure $ pointCoordInSpiral worldDimension     1_000)
+      , bench "   10 000" $ nfIO (pure $ pointCoordInSpiral worldDimension    10_000)
+      , bench "4 000 000" $ nfIO (pure $ pointCoordInSpiral           3000 4_000_000)
       ]
     , bgroup "complete process" [
-        bench "direct"   $ nfIO (maxByDirect   scroll)
-      , bench "template" $ nfIO (maxByTemplate scroll)
+        bench "NO template" $ nfIO (maxByNoTemplate scroll)
+      , bench "template"    $ nfIO (maxByTemplate   scroll)
       ]
     ]
 
 
 maxByTemplate :: BC.ByteString -> IO Int
-maxByTemplate bs = findLargestIsland
-                .  addCoords
-                .  mkWorldByTemplate spiralWorldTemplate
-               <$> parseWorldConcurr bs
+maxByTemplate bs =  findLargestIsland
+                 .  addCoords
+                 .  mkWorldByTemplate spiralWorldTemplate
+                <$> parseWorld chunkSize bs
 
-maxByDirect :: BC.ByteString -> IO Int
-maxByDirect bs = findLargestIsland
-              .  mkWorld
-             <$> parseWorldConcurr bs
+maxByNoTemplate :: BC.ByteString -> IO Int
+maxByNoTemplate bs =  findLargestIsland
+                   .  mkWorld
+                  <$> parseWorld chunkSize bs

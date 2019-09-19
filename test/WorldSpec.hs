@@ -6,17 +6,24 @@ import           Test.Hspec
 
 import           Template              (spiralWorldTemplate, zigZagWorldTemplate)
 import           World                 (World (..), addCoords, findLargestIsland, mkWorld,
-                                        mkWorldByTemplate, parseWorld, parseWorldConcurr,
+                                        mkWorldByTemplate, parseWorld,
                                         parsedWorldEqualString)
 
-okScroll, badScroll, parsedScroll :: BC.ByteString
-okScroll     = "#~~~##~~#~~###~#~~##~#~#~"
+okScroll :: BC.ByteString
+okScroll = "#~~~##~~#~~###~#~~##~#~#~"
+
+parsedScroll :: String
 parsedScroll = "~~~~3~~~2~~2~~~1~~2~~1~1~"
-badScroll    = "~~~##~~#~~###~#~~##~#~#~x"
+
+badScroll :: BC.ByteString
+badScroll = "~~~##~~#~~###~#~~##~#~#~x"
+
+chunkSize :: Int
+chunkSize = 3000
 
 spec :: Spec
 spec = do
-  parsedWorld <- runIO $ parseWorldConcurr okScroll
+  parsedWorld <- runIO $ parseWorld chunkSize okScroll
   let spiralWorld  = mkWorldByTemplate spiralWorldTemplate parsedWorld
       spiralCoords = addCoords spiralWorld
       zigZagWorld  = mkWorldByTemplate zigZagWorldTemplate parsedWorld
@@ -26,8 +33,10 @@ spec = do
     it "parse valid scroll" $
       parsedWorldEqualString parsedWorld parsedScroll `shouldBe` True
 
-    it "reject invalid scroll" $
-      evaluate (parseWorld badScroll) `shouldThrow` anyErrorCall
+    it "reject invalid scroll" $ do
+      badWorld <- parseWorld 10 badScroll
+      parsedWorldEqualString badWorld "" `shouldBe` False
+      -- evaluate (parseWorld 10 badScroll) `shouldThrow` anyErrorCall
 
 
   describe "Template can" $ do
