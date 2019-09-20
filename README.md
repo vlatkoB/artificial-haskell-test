@@ -25,4 +25,11 @@ This is all nice and pretty, but it could use a lot of memory, depending on the 
 So, why not create a function that can calculate the coordinates of a village based on its sequence number. Exactly that is what direct coordination search does. No template at all. Done for SpiralWorld only.
 Criterion shows that this approach is about two times faster.
 
-How to process the scroll can be specified via command line param (`--spiral`, `--zig-zag`, `--no-template`).
+Scroll processing options:
+
+ - `--spiral`      - apply scroll to spiral world template
+ - `--zig-zag`     - apply scroll to zig-zag world template
+ - `--no-template` - calculate population via spiral world, but without template, direct coordinate calculation
+ - `--scroll`      - specify the path of the scroll
+ - `--chunk_size`  - if not present, sequential processing is used
+                   - if present, specify the size of chunks in Bytes to spread over CPUs, use +RTS -Nx to specify num of cores

@@ -6,13 +6,15 @@ import           Criterion.Main         (defaultMainWith)
 import           Criterion.Main.Options (defaultConfig)
 import           Criterion.Types        as Crit
 import qualified Data.ByteString.Char8  as BC
+import           System.Directory       (getFileSize)
 
 
 import           Orphans                ()
 import           Template               (pointCoordInSpiral, spiralWorldTemplate,
                                          zigZagWorldTemplate)
-import           World                  (addCoords, findLargestIsland, mkWorld,
-                                         mkWorldByTemplate, parseWorld)
+import           World                  (ProcessingKind (..), addCoords,
+                                         findLargestIsland, mkWorld, mkWorldByTemplate,
+                                         parseWorld)
 
 
 
@@ -22,36 +24,33 @@ critCfg = defaultConfig {reportFile  = Just "artificial-haskell-test.html" }
 scrollPath :: FilePath
 scrollPath = "data/the.scroll"
 
-chunkSize :: Int
-chunkSize = 3000
-
-
-
 main :: IO ()
 main = do
+  sz     <- fromIntegral <$> getFileSize scrollPath
   scroll <- BC.readFile scrollPath
-  pw     <- parseWorld chunkSize scroll
 
-  let worldDimension = ceiling @Float . sqrt . fromIntegral $ length scroll
-      spiralWorld    = force $ mkWorldByTemplate spiralWorldTemplate pw
-      spiralCoords   = force $ addCoords spiralWorld
-      directWorld    = force $ mkWorld pw
+  let !pw             = parseWorld scroll
+      !worldDimension = ceiling @Float . sqrt $ fromIntegral sz
+      !spiralWorld    = force $ mkWorldByTemplate sz spiralWorldTemplate pw
+      !spiralCoords   = force $ addCoords spiralWorld
+      !directWorld    = force $ mkWorld sz Sequential pw
 
   defaultMainWith critCfg [
       bgroup "parsing" [
-        bench "concurrent" $ nfIO (parseWorld chunkSize scroll)
+        bench "sequential" $ nfIO (pure $ parseWorld scroll)
       ]
     , bgroup "make template" [
         bench "spiral"  $ nfIO (pure $ spiralWorldTemplate worldDimension)
       , bench "zig-zag" $ nfIO (pure $ zigZagWorldTemplate worldDimension)
       ]
     , bgroup "spiral world template" [
-        bench "mkWorldTemplate" $ nfIO (pure $ mkWorldByTemplate spiralWorldTemplate pw)
+        bench "mkWorldTemplate" $ nfIO (pure $ mkWorldByTemplate sz spiralWorldTemplate pw)
       , bench "addCoords"       $ nfIO (pure $ addCoords spiralWorld)
       , bench "calcPopulation"  $ nfIO (pure $ findLargestIsland spiralCoords)
       ]
     , bgroup "world NO template" [
-        bench "mkWorld"        $ nfIO (pure $ mkWorld pw)
+        bench "mkWorld"        $ nfIO (pure $ mkWorld sz Sequential      pw)
+      , bench "mkWorldPar"     $ nfIO (pure $ mkWorld sz (Parallel 3000) pw)
       , bench "max population" $ nfIO (pure $ findLargestIsland directWorld)
       ]
     , bgroup "finding coordinates" [
@@ -61,19 +60,20 @@ main = do
       , bench "4 000 000" $ nfIO (pure $ pointCoordInSpiral           3000 4_000_000)
       ]
     , bgroup "complete process" [
-        bench "NO template" $ nfIO (maxByNoTemplate scroll)
-      , bench "template"    $ nfIO (maxByTemplate   scroll)
+        bench "NO template"     $ nfIO (pure $ maxByNoTemplate  Sequential     sz scroll)
+      , bench "NO template PAR" $ nfIO (pure $ maxByNoTemplate (Parallel 3000) sz scroll)
+      , bench "template"        $ nfIO (pure $ maxByTemplate                   sz scroll)
       ]
     ]
 
 
-maxByTemplate :: BC.ByteString -> IO Int
-maxByTemplate bs =  findLargestIsland
+maxByTemplate :: Int -> BC.ByteString -> Int
+maxByTemplate sz =  findLargestIsland
                  .  addCoords
-                 .  mkWorldByTemplate spiralWorldTemplate
-                <$> parseWorld chunkSize bs
+                 .  mkWorldByTemplate sz spiralWorldTemplate
+                 .  parseWorld
 
-maxByNoTemplate :: BC.ByteString -> IO Int
-maxByNoTemplate bs =  findLargestIsland
-                   .  mkWorld
-                  <$> parseWorld chunkSize bs
+maxByNoTemplate :: ProcessingKind -> Int -> BC.ByteString -> Int
+maxByNoTemplate pk sz = findLargestIsland
+                      . mkWorld sz pk
+                      . parseWorld

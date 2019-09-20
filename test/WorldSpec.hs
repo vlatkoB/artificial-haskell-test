@@ -5,9 +5,9 @@ import qualified Data.ByteString.Char8 as BC (ByteString)
 import           Test.Hspec
 
 import           Template              (spiralWorldTemplate, zigZagWorldTemplate)
-import           World                 (World (..), addCoords, findLargestIsland, mkWorld,
-                                        mkWorldByTemplate, parseWorld,
-                                        parsedWorldEqualString)
+import           World                 (ProcessingKind (..), World (..), addCoords,
+                                        findLargestIsland, mkWorld, mkWorldByTemplate,
+                                        parseWorld, unParsedWorld)
 
 okScroll :: BC.ByteString
 okScroll = "#~~~##~~#~~###~#~~##~#~#~"
@@ -18,25 +18,21 @@ parsedScroll = "~~~~3~~~2~~2~~~1~~2~~1~1~"
 badScroll :: BC.ByteString
 badScroll = "~~~##~~#~~###~#~~##~#~#~x"
 
-chunkSize :: Int
-chunkSize = 3000
-
 spec :: Spec
 spec = do
-  parsedWorld <- runIO $ parseWorld chunkSize okScroll
-  let spiralWorld  = mkWorldByTemplate spiralWorldTemplate parsedWorld
+  let parsedWorld  = parseWorld okScroll
+      size         = length okScroll
+      spiralWorld  = mkWorldByTemplate size spiralWorldTemplate parsedWorld
       spiralCoords = addCoords spiralWorld
-      zigZagWorld  = mkWorldByTemplate zigZagWorldTemplate parsedWorld
+      zigZagWorld  = mkWorldByTemplate size zigZagWorldTemplate parsedWorld
       zigZagCoords = addCoords zigZagWorld
 
   describe "Parser can" $ do
     it "parse valid scroll" $
-      parsedWorldEqualString parsedWorld parsedScroll `shouldBe` True
+      unParsedWorld parsedWorld `shouldBe` reverse parsedScroll
 
     it "reject invalid scroll" $ do
-      badWorld <- parseWorld 10 badScroll
-      parsedWorldEqualString badWorld "" `shouldBe` False
-      -- evaluate (parseWorld 10 badScroll) `shouldThrow` anyErrorCall
+      evaluate (parseWorld badScroll) `shouldThrow` anyErrorCall
 
 
   describe "Template can" $ do
@@ -74,7 +70,9 @@ spec = do
                                                                            ]
 
   describe "Max population for" $ do
-    let directSpiralCoords = mkWorld parsedWorld
+    let directSpiralCoords = mkWorld (length $ unParsedWorld parsedWorld)
+                                      Sequential
+                                      parsedWorld
     it "template Spiral World" $ findLargestIsland spiralCoords       `shouldBe` 6
     it "direct ZigZag World"   $ findLargestIsland zigZagCoords       `shouldBe` 7
     it "direct Spiral World"   $ findLargestIsland directSpiralCoords `shouldBe` 6

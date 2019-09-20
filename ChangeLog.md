@@ -1,6 +1,17 @@
 # Changelog for artificial-haskell-test
 
 
+## 0.0.0.4
+  Speed improvements (112 ms -> 38 ms):
+  - optimise last digit check
+  - pure sequential parsing
+  - skip reverse, calculation with reversed world
+  - simpler pattern match for `pointCoordInSpiral`
+  - better error message
+  - no length check
+  - no chunking
+  - parallel find of village coordinates
+
 ## 0.0.0.3
   Speed improvements (234 ms -> 112 ms):
   - Map -> HashMap

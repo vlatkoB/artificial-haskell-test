@@ -44,10 +44,12 @@ mapOver s = map (BC.pack . map go) . unTemplate
 --   Coord system is top-left based starting with (1,1)
 pointCoordInSpiral :: Int -> Int -> Coord
 pointCoordInSpiral 1 1 = (1,1)
-pointCoordInSpiral 2 1 = (1,1)
-pointCoordInSpiral 2 2 = (2,1)
-pointCoordInSpiral 2 3 = (2,2)
-pointCoordInSpiral 2 4 = (1,2)
+pointCoordInSpiral 2 p =
+  case p of
+    1 -> (1,1)
+    2 -> (2,1)
+    3 -> (2,2)
+    _ -> (1,2)
 pointCoordInSpiral dimension position = do
   let fullDim = floor   @Float . sqrt $ fromIntegral position
       jumpDim = ceiling @Float $ fromIntegral (dimension - fullDim) / 2

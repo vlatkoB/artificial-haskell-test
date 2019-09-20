@@ -4,19 +4,19 @@ import           ClassyPrelude
 
 import qualified Data.ByteString.Char8 as BC
 import           Options.Applicative   (auto, execParser, flag', fullDesc, header, help,
-                                        helper, info, long, option, progDesc, short,
-                                        showDefault, strOption, value, (<**>))
-import           System.Directory      (doesFileExist)
+                                        helper, info, long, option, optional, progDesc,
+                                        short, showDefault, strOption, value, (<**>))
+import           System.Directory      (doesFileExist, getFileSize)
 
 
 import           Template              (spiralWorldTemplate, zigZagWorldTemplate)
-import           World                 (addCoords, findLargestIsland, mkWorld,
-                                        mkWorldByTemplate, parseWorld)
+import           World                 (ProcessingKind (..), addCoords, findLargestIsland,
+                                        mkWorld, mkWorldByTemplate, parseWorld)
 
 -- | Scroll can be processed in these ways, which should be specified in cmd line
-data ProcessType = Spiral     -- ^ use SpiralWorld template
-                 | ZigZag     -- ^ use ZigZagWorld template
-                 | NoTemplate -- ^ find coordinates in SpiralWorld by algorithm
+data ProcessType = Spiral        -- ^ use SpiralWorld template
+                 | ZigZag        -- ^ use ZigZagWorld template
+                 | NoTemplate    -- ^ find coordinates in SpiralWorld by algorithm
   deriving (Show)
 
 
@@ -24,7 +24,7 @@ data ProcessType = Spiral     -- ^ use SpiralWorld template
 data Args = Args
   { argScrollPath  :: FilePath    -- ^ config file to use
   , argProcessType :: ProcessType -- ^ how to process the scroll
-  , argChunkSize   :: Int         -- ^ size of the chunk to perform concurrent parse
+  , argChunkSize   :: Maybe Int   -- ^ size of the chunk to perform concurrent parse
   } deriving (Show)
 
 -- | Entry point
@@ -32,18 +32,24 @@ main :: IO ()
 main = do
   Args{..} <- execParser pInfo
 
-  putStrLn $ "\nProcessing '" <> pack argScrollPath <> "' scroll via "
-          <> tshow argProcessType <> " ..."
+  putStrLn $ "\nProcessing '" <> pack argScrollPath <> "' scroll"
+          <> maybe " sequentially" (const " in parallel") argChunkSize
+          <> " via " <> tshow argProcessType
+          <> " ..."
 
   doesFileExist argScrollPath >>= \case
     False -> putStrLn noFileError
     True  -> do
-      pw <- parseWorld argChunkSize =<< BC.readFile argScrollPath
+      size <- fromIntegral <$> getFileSize argScrollPath
+      pw   <- parseWorld <$> BC.readFile argScrollPath
 
-      let vlgs = case argProcessType of
-                   Spiral     -> addCoords $ mkWorldByTemplate spiralWorldTemplate pw
-                   ZigZag     -> addCoords $ mkWorldByTemplate zigZagWorldTemplate pw
-                   NoTemplate -> mkWorld pw
+      let procKind = case argChunkSize of
+                       Nothing    -> Sequential
+                       Just chunk -> Parallel chunk
+          vlgs = case argProcessType of
+                   Spiral     -> addCoords $ mkWorldByTemplate size spiralWorldTemplate pw
+                   ZigZag     -> addCoords $ mkWorldByTemplate size zigZagWorldTemplate pw
+                   NoTemplate -> mkWorld size procKind pw
 
       putStrLn $ "Largest population on an island is: " <> tshow (findLargestIsland vlgs)
 
@@ -55,9 +61,9 @@ main = do
                             <> value "data/the.scroll" <> showDefault
                             <> help "Path of the scroll file")
                 <*> (spiralP <|> zigZagP <|> noTemplateP)
-                <*> option auto (long "chunk_size" <> short 'z'
-                              <> value 3000 <> showDefault
-                              <> help "Size of chunk in bytes for concurrent parse")
+                <*> optional (option auto (long "chunk_size" <> short 'z'
+                                        <> help "Size of chunk in bytes for concurrent parse")
+                             )
 
     spiralP     = flag' Spiral     (long "spiral"      <> help "Spiral template")
     zigZagP     = flag' ZigZag     (long "zig-zag"     <> help "Zig-zag template")

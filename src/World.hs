@@ -2,7 +2,8 @@ module World
   ( World (..)
   , Village
   , ParsedWorld
-  , parsedWorldEqualString
+  , unParsedWorld
+  , ProcessingKind (..)
 
   , parseWorld
   , findLargestIsland
@@ -14,12 +15,15 @@ where
 
 import           ClassyPrelude
 
-import qualified Data.ByteString.Char8 as BC
-import           Data.Char             (isDigit, ord)
-import qualified Data.HashMap.Strict   as M
-import           GHC.Generics          (Generic)
+import           Control.Parallel.Strategies (using, parListChunk, rdeepseq)
+import qualified Data.ByteString.Char8       as BC
+import           Data.Char                   (chr, isDigit, ord)
+import qualified Data.HashMap.Strict         as M
+import           GHC.Generics                (Generic)
 
-import           Template              (Coord, Template (..), mapOver, pointCoordInSpiral)
+import           Template                    (Coord, Template (..), mapOver,
+                                              pointCoordInSpiral)
+
 
 ------------------------------------------------------------------------------------------
 -- Types
@@ -30,9 +34,14 @@ newtype World = World {unWorld :: [BC.ByteString] }
   deriving (Show, Eq, Ord, Generic)
 
 -- | Hold a scroll with parsed population
-newtype ParsedWorld = ParsedWorld {unParsedWorld :: String }
+newtype ParsedWorld = ParsedWorld String
   deriving (Show, Eq, Ord, Generic)
 
+unParsedWorld :: ParsedWorld -> String
+unParsedWorld (ParsedWorld s) = s
+
+-- | How to process the scroll (only mkWorld for now)
+data ProcessingKind = Sequential | Parallel Int
 
 ------------------------------------------------------------------------------------------
 -- Aliases
@@ -46,14 +55,6 @@ type VillageCoords = HashMap Coord Char
 
 -- | Group of villages for an island
 type Island = [Village]
-
-------------------------------------------------------------------------------------------
--- Testing helpers
-------------------------------------------------------------------------------------------
-
--- | Data constructor not exported, so this one allows comparing parsed world with string
-parsedWorldEqualString :: ParsedWorld -> String -> Bool
-parsedWorldEqualString (ParsedWorld a) b = a == b
 
 
 ------------------------------------------------------------------------------------------
@@ -72,24 +73,19 @@ islandPopulation = sum . map (toInt . snd)
 --   - ~ is water
 --   - number of ~ before # signifies the population of the village
 --   - if population larger that 9, use last digit as population
-parseWorld :: Int -> BC.ByteString -> IO ParsedWorld
-parseWorld chunkSize = fmap (ParsedWorld . concatMap (reverse . snd))
-                     . mapConcurrently (pure . BC.foldl' countWaters (0, mempty))
-                     . chunks chunkSize
+parseWorld :: BC.ByteString -> ParsedWorld
+parseWorld = ParsedWorld . snd . BC.foldl' countWaters (0, mempty)
   where
-    chunks n xs
-      | null xs   = mempty
-      | otherwise = let (ys, zs) = BC.splitAt n xs in ys : chunks n zs
-
     -- | Count the waters and make population, or transform 0 water # to water
     countWaters :: (Int, String) -> Char -> (Int, String)
-    countWaters (population,acc) c = do
-      let lastDigit = take 1 . reverse $ show population
-      case (readMay lastDigit, headMay lastDigit, c) of
-        (Just 0, _,     '#') -> (0,   '~' : acc)
-        (Just n, _,     '~') -> (n+1, '~' : acc)
-        (Just _, Just d,'#') -> (0,   d   : acc)
-        _                    -> error "countWaters: impossible happened"
+    countWaters (n,acc) c = do
+      let succN = bool 0 (n + 1) $ n < 9
+          charN = chr $ n + 48
+      case (n, c) of
+        (0, '#') -> (0,     '~'   : acc)
+        (_, '~') -> (succN, '~'   : acc)
+        (_, '#') -> (0,     charN : acc)
+        (_, x)   -> error $ "Bad char in scroll: " <> [x]
 
 
 -- | Given the coordinates and population of each village, group villages into islands,
@@ -133,13 +129,12 @@ surroundCoords (x,y) = [ (x-1, y-1),(x, y-1),(x+1, y-1)
 
 -- | Create a 2D world according to specified `Template` and map parsed scroll with
 --   population over it. It is a left-top matrix.
-mkWorldByTemplate :: (Int -> Template) -> ParsedWorld -> World
-mkWorldByTemplate template (ParsedWorld parsedWorld) =
-  World $ BC.pack parsedWorld `mapOver` ( template
-                                        . ceiling @Float
-                                        . sqrt
-                                        . fromIntegral
-                                        $ length parsedWorld)
+mkWorldByTemplate :: Int -> (Int -> Template) -> ParsedWorld -> World
+mkWorldByTemplate size template (ParsedWorld parsedWorld) = World $
+  BC.pack (reverse parsedWorld) `mapOver` ( template
+                                          . ceiling @Float
+                                          . sqrt
+                                          $ fromIntegral size)
 
 
 -- | Add to each village its coordinates and after remove any water
@@ -158,12 +153,17 @@ addCoords = mapFromList . concatMap (\(x,yv) -> mapMaybe (go x) yv)
 ------------------------------------------------------------------------------------------
 
 -- | Gather villages and their coordinates only in a map.
-mkWorld :: ParsedWorld -> VillageCoords
-mkWorld (ParsedWorld parsedWorld) =
-  mapFromList . mapMaybe go $ zip [1..] parsedWorld
+mkWorld :: Int -> ProcessingKind -> ParsedWorld -> VillageCoords
+mkWorld size pk (ParsedWorld parsedWorld) = do
+  let xs = zip [ size, size - 1 .. 1] parsedWorld
+  mapFromList $ case pk of
+    Sequential     -> mapMaybe go xs
+    Parallel chunk -> (mapMaybe go) xs
+                        `using`
+                      parListChunk chunk rdeepseq
 
   where
-    dim       = ceiling @Float . sqrt . fromIntegral $ length parsedWorld
+    dim       = ceiling @Float . sqrt $ fromIntegral size
     go (n, c) = if isDigit c
-      then Just . (,c) $ pointCoordInSpiral dim n
+      then Just . (,c) $ pointCoordInSpiral dim $ n
       else Nothing
