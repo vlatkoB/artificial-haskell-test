@@ -1,5 +1,5 @@
 name:                artificial-haskell-test
-version:             0.0.0.4
+version:             0.0.0.5
 github:              vlatkoB/artificial-haskell-test
 license:             BSD3
 author:              Vlatko Bašić
@@ -49,7 +49,7 @@ dependencies:
   - directory
   - parallel
   - unordered-containers
-
+  - vector
 
 ghc-options:
   - -Wall
@@ -66,6 +66,7 @@ library:
   source-dirs: src
   exposed-modules:
     - Template
+    - Vector
     - World
 
 executables:
@@ -87,8 +88,9 @@ tests:
     main:                Spec.hs
     source-dirs:         test
     dependencies:
-    - artificial-haskell-test
-    - hspec
+      - artificial-haskell-test
+      - hspec
+      - QuickCheck
 
     ghc-options:
     - -threaded

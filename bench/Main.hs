@@ -1,7 +1,7 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Main where
 
 import           ClassyPrelude          hiding (lookup)
+
 import           Criterion.Main         (defaultMainWith)
 import           Criterion.Main.Options (defaultConfig)
 import           Criterion.Types        as Crit
@@ -10,8 +10,9 @@ import           System.Directory       (getFileSize)
 
 
 import           Orphans                ()
-import           Template               (pointCoordInSpiral, spiralWorldTemplate,
-                                         zigZagWorldTemplate)
+import           Template               (coordToSeqSpiral, seqToCoordSpiral,
+                                         spiralWorldTemplate, zigZagWorldTemplate)
+import qualified Vector                 as VecWorld
 import           World                  (ProcessingKind (..), addCoords,
                                          findLargestIsland, mkWorld, mkWorldByTemplate,
                                          parseWorld)
@@ -19,7 +20,7 @@ import           World                  (ProcessingKind (..), addCoords,
 
 
 critCfg :: Crit.Config
-critCfg = defaultConfig {reportFile  = Just "artificial-haskell-test.html" }
+critCfg = defaultConfig {reportFile  = Just "artificial-haskell-test-bench.html" }
 
 scrollPath :: FilePath
 scrollPath = "data/the.scroll"
@@ -28,6 +29,7 @@ main :: IO ()
 main = do
   sz     <- fromIntegral <$> getFileSize scrollPath
   scroll <- BC.readFile scrollPath
+  vsVec  <- force <$> VecWorld.parseWorld sz scroll
 
   let !pw             = parseWorld scroll
       !worldDimension = ceiling @Float . sqrt $ fromIntegral sz
@@ -37,7 +39,8 @@ main = do
 
   defaultMainWith critCfg [
       bgroup "parsing" [
-        bench "sequential" $ nfIO (pure $ parseWorld scroll)
+        bench "sequential" $ nfIO (pure $      parseWorld    scroll)
+      , bench "vector"     $ nfIO (   VecWorld.parseWorld sz scroll)
       ]
     , bgroup "make template" [
         bench "spiral"  $ nfIO (pure $ spiralWorldTemplate worldDimension)
@@ -49,19 +52,29 @@ main = do
       , bench "calcPopulation"  $ nfIO (pure $ findLargestIsland spiralCoords)
       ]
     , bgroup "world NO template" [
-        bench "mkWorld"        $ nfIO (pure $ mkWorld sz Sequential      pw)
-      , bench "mkWorldPar"     $ nfIO (pure $ mkWorld sz (Parallel 3000) pw)
-      , bench "max population" $ nfIO (pure $ findLargestIsland directWorld)
+        bench "mkWorld"            $ nfIO (pure $ mkWorld sz Sequential      pw)
+      , bench "mkWorldPar"         $ nfIO (pure $ mkWorld sz (Parallel 3000) pw)
       ]
-    , bgroup "finding coordinates" [
-        bench "      100" $ nfIO (pure $ pointCoordInSpiral worldDimension       100)
-      , bench "    1 000" $ nfIO (pure $ pointCoordInSpiral worldDimension     1_000)
-      , bench "   10 000" $ nfIO (pure $ pointCoordInSpiral worldDimension    10_000)
-      , bench "4 000 000" $ nfIO (pure $ pointCoordInSpiral           3000 4_000_000)
+    , bgroup "max population spiral" [
+        bench "no template" $ nfIO (pure $ findLargestIsland directWorld)
+      , bench "vector"      $ nfIO (       VecWorld.getMaxPopulation worldDimension vsVec)
+      ]
+    , bgroup "sequential to coordinates" [
+        bench "      100" $ nfIO (pure $ seqToCoordSpiral worldDimension       100)
+      , bench "    1 000" $ nfIO (pure $ seqToCoordSpiral worldDimension     1_000)
+      , bench "   10 000" $ nfIO (pure $ seqToCoordSpiral worldDimension    10_000)
+      , bench "4 000 000" $ nfIO (pure $ seqToCoordSpiral           3000 4_000_000)
+      ]
+    , bgroup "coordinates to sequential" [
+        bench " 1 000" $ nfIO (pure $ coordToSeqSpiral  1_000 (   200,    200))
+      , bench " 5 000" $ nfIO (pure $ coordToSeqSpiral  5_000 ( 2_000,  2_000))
+      , bench "10 000" $ nfIO (pure $ coordToSeqSpiral 10_000 ( 7_000,  7_000))
+      , bench "20 000" $ nfIO (pure $ coordToSeqSpiral 20_000 (13_000, 13_000))
       ]
     , bgroup "complete process" [
         bench "NO template"     $ nfIO (pure $ maxByNoTemplate  Sequential     sz scroll)
       , bench "NO template PAR" $ nfIO (pure $ maxByNoTemplate (Parallel 3000) sz scroll)
+      , bench "NO template VEC" $ nfIO (       maxByVector                     sz scroll)
       , bench "template"        $ nfIO (pure $ maxByTemplate                   sz scroll)
       ]
     ]
@@ -77,3 +90,6 @@ maxByNoTemplate :: ProcessingKind -> Int -> BC.ByteString -> Int
 maxByNoTemplate pk sz = findLargestIsland
                       . mkWorld sz pk
                       . parseWorld
+
+maxByVector :: Int -> BC.ByteString -> IO Int
+maxByVector = VecWorld.parseAndProcess

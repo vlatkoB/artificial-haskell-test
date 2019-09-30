@@ -1,10 +1,17 @@
 module TemplateSpec (spec) where
 
 import ClassyPrelude
-import Test.Hspec    (describe, it, shouldBe, Spec)
+import Test.Hspec      (Spec, describe, it, shouldBe)
+import Test.QuickCheck (Arbitrary (..), choose, property)
 
-import Template      (Template (..), pointCoordInSpiral, spiralWorldTemplate,
-                      zigZagWorldTemplate)
+import Template        (Template (..), coordToSeqSpiral, seqToCoordSpiral,
+                        spiralWorldTemplate, zigZagWorldTemplate)
+
+data DimSeq = DimSeq Int Int deriving (Show, Generic)
+instance Arbitrary DimSeq where
+  arbitrary = do
+    dim <- choose (0,1000)
+    DimSeq dim <$> choose (1,dim*dim)
 
 spec :: Spec
 spec = do
@@ -17,9 +24,16 @@ spec = do
     it "create 4 dimensions" $ zigZagWorldTemplate 4 `shouldBe` zigZag4
 
   describe "Direct coordinates for SpiralWorld in" $ do
-    it "2 dimensions" $ pointCoordInSpiral 2 2 `shouldBe` (2,1)
-    it "5 dimensions" $ pointCoordInSpiral 5 2 `shouldBe` (4,3)
-    it "9 dimensions" $ pointCoordInSpiral 9 2 `shouldBe` (6,5)
+    it "2 dimensions" $ seqToCoordSpiral 2 2 `shouldBe` (2,1)
+    it "5 dimensions" $ seqToCoordSpiral 5 2 `shouldBe` (4,3)
+    it "9 dimensions" $ seqToCoordSpiral 9 2 `shouldBe` (6,5)
+
+  describe "Convert between sequential position and" $ do
+    it " coordinates in Spiral world" $ property $
+      \(DimSeq dim pos ) -> do
+        let coord = seqToCoordSpiral dim pos
+            pos'  = coordToSeqSpiral dim coord
+        pos == pos'
 
 
 

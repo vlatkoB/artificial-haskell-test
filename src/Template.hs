@@ -3,17 +3,17 @@ module Template
   , Coord
 
   , mapOver
-  , pointCoordInSpiral
+  , seqToCoordSpiral
+  , coordToSeqSpiral
   , spiralWorldTemplate
   , zigZagWorldTemplate
   )
 where
 
-import           ClassyPrelude
+import ClassyPrelude
 
-import qualified Data.ByteString.Char8 as BC
-import           Data.List             (transpose)
-import           GHC.Generics          (Generic)
+import Data.List                    (transpose)
+import GHC.Generics                 (Generic)
 
 
 ------------------------------------------------------------------------------------------
@@ -35,42 +35,78 @@ type Coord  = (Int, Int)
 -- Funcs
 ------------------------------------------------------------------------------------------
 -- | Roll string of chars over the template
-mapOver :: BC.ByteString -> Template -> [BC.ByteString]
-mapOver s = map (BC.pack . map go) . unTemplate
-  where go n = maybe ' ' fst . BC.uncons $ BC.drop (pred n) s
-
+mapOver :: [Word8] -> Template -> [[Word8]]
+mapOver s = map (map go) . unTemplate
+  where go n = maybe 0 fst . uncons $ drop (pred n) s
 
 -- | Get the coordinates for a sequential point in an n-dimensional 2D square spiral.
 --   Coord system is top-left based starting with (1,1)
-pointCoordInSpiral :: Int -> Int -> Coord
-pointCoordInSpiral 1 1 = (1,1)
-pointCoordInSpiral 2 p =
+seqToCoordSpiral :: Int -> Int -> Coord
+seqToCoordSpiral 1 1 = (1,1)
+seqToCoordSpiral 2 p =
   case p of
-    1 -> (1,1)
-    2 -> (2,1)
-    3 -> (2,2)
-    _ -> (1,2)
-pointCoordInSpiral dimension position = do
+    1 -> ( 1, 1)
+    2 -> ( 2, 1)
+    3 -> ( 2, 2)
+    4 -> ( 1, 2)
+    _ -> (-1,-1)
+seqToCoordSpiral dimension position = do
   let fullDim = floor   @Float . sqrt $ fromIntegral position
       jumpDim = ceiling @Float $ fromIntegral (dimension - fullDim) / 2
-      initPos = if even fullDim
-                  then (1 + jumpDim, fullDim + jumpDim)
-                  else (fullDim + jumpDim, 1 + jumpDim)
+      initPos = ((jumpDim +) *** (jumpDim +)) $
+        if | even fullDim   -> (1,           fullDim)
+           | even dimension -> (fullDim - 1, 0)
+           | otherwise      -> (fullDim,     1)
       newPos  = position - pow2 fullDim
 
-  if position >= pow2 dimension
-    then error "Matrix dimension too small for searched point"
-    else go (fullDim + 1) newPos initPos
+  if position <= pow2 dimension
+    then go (fullDim + 1) newPos initPos
+    else error $ "Matrix dimension (" <> show dimension <> ") "
+              <> "too small for searched point (" <> show position <> ")"
   where
     go !dim n (!x, !y) =
       if | n <= 0    -> (x, y)
          | even dim  -> (x + 1 - xMove, y + yMove)
          | odd  dim  -> (x - 1 + xMove, y - yMove)
-         | otherwise -> error "should never be reached"
-
+         | otherwise -> error "seqToCoordSpiral: go >> should never be reached"
       where
         yMove = min (dim - 1) (n - 1)
         xMove = min (dim - 1) (n - 1 - yMove)
+
+
+-- | Convert coordinates from specified dimension to sequential number in Spiral world
+coordToSeqSpiral :: Int -> Coord -> Int
+coordToSeqSpiral dim (x,y) = do
+  let (maxX,maxY) = seqToCoordSpiral dim $ pow2 maxDim
+      advance     = 1 + if | abs (maxY - y) /= maxDim -> abs $ maxY - y
+                           | even maxDim              -> maxDim + 1 + x - maxX
+                           | otherwise                -> maxDim + 1 - x + maxX
+
+  if | (x,y) == (mp,     mp)     -> 1
+     | (x,y) == (mp + 1, mp)     -> 2
+     | (x,y) == (mp + 1, mp + 1) -> 3
+     | (x,y) == (mp,     mp + 1) -> 4
+     | otherwise                 -> pow2 maxDim + advance
+  where
+    mp     = ceiling @Float @Int $ fromIntegral dim / 2
+    maxDim = do
+      if (x,y) `elem` [(mp,mp),(mp+1,mp),(mp+1,mp+1),(mp,mp+1)]
+        then 1
+        else getLargestInnerDim $ max (abs $ x - mp) (abs $ y - mp) + 1
+
+      where
+        --  FIXME: very bad performance. Calc of minDim is very poor.
+        getLargestInnerDim minDim = do
+          let nextDim = minDim + 1
+          if insideDim nextDim
+            then minDim
+            else getLargestInnerDim nextDim
+
+        insideDim d = let (mx,my) = seqToCoordSpiral dim $ pow2 d
+                          (x1,y1) = if even d then (mx,my) else (my,mx)
+                          (x2,y2) = if odd  d then (mx,my) else (my,mx)
+                       in x >= x1 && x <= x2 && y <= y1 && y >= y2
+
 
 -- | Create a square spiral template starting in the middle and going clock-wise
 spiralWorldTemplate :: Int -> Template
@@ -98,77 +134,3 @@ zigZagWorldTemplate n = Template $ map mkList [0..n - 1]
 ------------------------------------------------------------------------------------------
 pow2 :: Int -> Int
 pow2 = (^ (2 :: Int))
-
-
-
-------------------------------------------------------------------------------------------
--- Testing
-------------------------------------------------------------------------------------------
-
--- m2 :: [[Int]]
--- m2 = [ [1,2]   -- RDL
---      , [4,3]
---      ]
-
--- m3 :: [[Int]]
--- m3 = [ [ 7, 8, 9]  -- LUURR
---      , [ 6, 1, 2]
---      , [ 5, 4, 3]
---      ]
-
--- m4 :: [[Int]]
--- m4 = [ [ 7, 8, 9,10]  -- RDDDLLL
---      , [ 6, 1, 2,11]
---      , [ 5, 4, 3,12]
---      , [16,15,14,13]
---      ]
-
--- m5 :: [[Int]]
--- m5 = [ [21,22,23,24,25]  -- LUUUURRRR
---      , [20, 7, 8, 9,10]
---      , [19, 6, 1, 2,11]
---      , [18, 5, 4, 3,12]
---      , [17,16,15,14,13]
---      ]
-
--- m6 :: [[Int]]
--- m6 = [ [21,22,23,24,25,26]  -- R DDDDD LLLLL
---      , [20, 7, 8, 9,10,27]
---      , [19, 6, 1, 2,11,28]
---      , [18, 5, 4, 3,12,29]
---      , [17,16,15,14,13,30]
---      , [36,35,34,33,32,31]
---      ]
-
--- m7 :: [[Int]]
--- m7 = [ [43,44,45,46,47,48,49]   -- R DDDDDD LLLLLL
---      , [42,21,22,23,24,25,26]
---      , [41,20, 7, 8, 9,10,27]
---      , [40,19, 6, 1, 2,11,28]
---      , [39,18, 5, 4, 3,12,29]
---      , [38,17,16,15,14,13,30]
---      , [37,36,35,34,33,32,31]
---      ]
-
--- m8 :: [[Int]]
--- m8 = [ [43,44,45,46,47,48,49,50]   -- R DDDDDDD LLLLLLL
---      , [42,21,22,23,24,25,26,51]
---      , [41,20, 7, 8, 9,10,27,52]
---      , [40,19, 6, 1, 2,11,28,53]
---      , [39,18, 5, 4, 3,12,29,54]
---      , [38,17,16,15,14,13,30,55]
---      , [37,36,35,34,33,32,31,56]
---      , [64,63,62,61,60,59,58,57]
---      ]
-
--- m9 :: [[Int]]
--- m9 = [ [73,74,75,76,77,78,79,80,81]  -- R DDDDDDDD LLLLLLLL
---      , [72,43,44,45,46,47,48,49,50]
---      , [71,42,21,22,23,24,25,26,51]
---      , [70,41,20, 7, 8, 9,10,27,52]
---      , [69,40,19, 6, 1, 2,11,28,53]
---      , [68,39,18, 5, 4, 3,12,29,54]
---      , [67,38,17,16,15,14,13,30,55]
---      , [66,37,36,35,34,33,32,31,56]
---      , [65,64,63,62,61,60,59,58,57]
---      ]

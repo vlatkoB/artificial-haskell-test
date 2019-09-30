@@ -30,6 +30,8 @@ Scroll processing options:
  - `--spiral`      - apply scroll to spiral world template
  - `--zig-zag`     - apply scroll to zig-zag world template
  - `--no-template` - calculate population via spiral world, but without template, direct coordinate calculation
+ - `--by-vector`   - calculate population via spiral world, using mutable vector
+                    (very bad performance due to inadequate `coordToSeqSpiral` function)
  - `--scroll`      - specify the path of the scroll
  - `--chunk_size`  - if not present, sequential processing is used
                    - if present, specify the size of chunks in Bytes to spread over CPUs, use +RTS -Nx to specify num of cores

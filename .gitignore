@@ -1,11 +1,7 @@
 *.cabal
-*~
 *.swp
-tarballs/
 .stack-work/
-.emacs*
 dist-newstyle/
-TAGS
-*old
-*bin
-.hg
+*prof
+*.hp
+*eventlog*

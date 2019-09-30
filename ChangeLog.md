@@ -1,6 +1,15 @@
 # Changelog for artificial-haskell-test
 
 
+## 0.0.0.5
+  Speed improvements (38 ms -> 35 ms):
+  - Rename 'pointCoordInSpiral to 'seqTocoordspiral'
+  - Parsed scroll is list of Word8
+  - Direct conversion from coordinate to sequential
+  - Introduced mutable Vector approach
+  - `--no-template` calculates population on the fly
+
+
 ## 0.0.0.4
   Speed improvements (112 ms -> 38 ms):
   - optimise last digit check
