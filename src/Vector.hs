@@ -125,11 +125,11 @@ getMaxPopulation dim (!vlgPositions,vec) = getNextVlg vlgPositions >>= \case
 
     {-# INLINE delVillage #-}
     delVillage :: VecIdx -> m ()
-    delVillage (VecIdx i) = MV.write vec i water
+    delVillage (VecIdx i) =  if i > MV.length vec then pure () else MV.write vec i water
 
     {-# INLINE getPopulation #-}
     getPopulation :: VecIdx -> m Population
-    getPopulation (VecIdx i) = MV.read vec i
+    getPopulation (VecIdx i) = if i > MV.length vec then pure 0 else MV.read vec i
 
 
 -- | Get matrix of surrounding points of given point, a "circle" around it

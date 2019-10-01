@@ -1,6 +1,9 @@
 # Changelog for artificial-haskell-test
 
 
+## 0.0.0.6
+  Only `--by-vector` speed improvements (543 ms -> 102 ms):
+
 ## 0.0.0.5
   Speed improvements (38 ms -> 35 ms):
   - Rename 'pointCoordInSpiral to 'seqTocoordspiral'

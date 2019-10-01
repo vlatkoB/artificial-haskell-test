@@ -92,20 +92,20 @@ coordToSeqSpiral dim (x,y) = do
     maxDim = do
       if (x,y) `elem` [(mp,mp),(mp+1,mp),(mp+1,mp+1),(mp,mp+1)]
         then 1
-        else getLargestInnerDim $ max (abs $ x - mp) (abs $ y - mp) + 1
+        else let md = getLargestInnerDim $  max (abs $ x - mp) (abs $ y - mp) * 2 - 1
+              in if md > dim then dim else md
 
       where
-        --  FIXME: very bad performance. Calc of minDim is very poor.
         getLargestInnerDim minDim = do
           let nextDim = minDim + 1
           if insideDim nextDim
             then minDim
             else getLargestInnerDim nextDim
 
-        insideDim d = let (mx,my) = seqToCoordSpiral dim $ pow2 d
-                          (x1,y1) = if even d then (mx,my) else (my,mx)
-                          (x2,y2) = if odd  d then (mx,my) else (my,mx)
-                       in x >= x1 && x <= x2 && y <= y1 && y >= y2
+        insideDim d = d > dim || let (mx,my) = seqToCoordSpiral dim $ pow2 d
+                                     (x1,y1) = if even d then (mx,my) else (my,mx)
+                                     (x2,y2) = if odd  d then (mx,my) else (my,mx)
+                                  in x >= x1 && x <= x2 && y <= y1 && y >= y2
 
 
 -- | Create a square spiral template starting in the middle and going clock-wise
