@@ -76,36 +76,15 @@ seqToCoordSpiral dimension position = do
 
 -- | Convert coordinates from specified dimension to sequential number in Spiral world
 coordToSeqSpiral :: Int -> Coord -> Int
-coordToSeqSpiral dim (x,y) = do
-  let (maxX,maxY) = seqToCoordSpiral dim $ pow2 maxDim
-      advance     = 1 + if | abs (maxY - y) /= maxDim -> abs $ maxY - y
-                           | even maxDim              -> maxDim + 1 + x - maxX
-                           | otherwise                -> maxDim + 1 - x + maxX
-
-  if | (x,y) == (mp,     mp)     -> 1
-     | (x,y) == (mp + 1, mp)     -> 2
-     | (x,y) == (mp + 1, mp + 1) -> 3
-     | (x,y) == (mp,     mp + 1) -> 4
-     | otherwise                 -> pow2 maxDim + advance
-  where
-    mp     = ceiling @Float @Int $ fromIntegral dim / 2
-    maxDim = do
-      if (x,y) `elem` [(mp,mp),(mp+1,mp),(mp+1,mp+1),(mp,mp+1)]
-        then 1
-        else let md = getLargestInnerDim $  max (abs $ x - mp) (abs $ y - mp) * 2 - 1
-              in if md > dim then dim else md
-
-      where
-        getLargestInnerDim minDim = do
-          let nextDim = minDim + 1
-          if insideDim nextDim
-            then minDim
-            else getLargestInnerDim nextDim
-
-        insideDim d = d > dim || let (mx,my) = seqToCoordSpiral dim $ pow2 d
-                                     (x1,y1) = if even d then (mx,my) else (my,mx)
-                                     (x2,y2) = if odd  d then (mx,my) else (my,mx)
-                                  in x >= x1 && x <= x2 && y <= y1 && y >= y2
+coordToSeqSpiral dim (x', y') = do
+  let mp = ceiling @Float @Int $ fromIntegral dim / 2
+      x  = x' - mp
+      y  = mp - y'
+  1 + if |       y  >=   abs x  -> 4 * pow2 y + 3 * y + x
+         |       y  <= -(abs x) -> 4 * pow2 y +     y - x
+         |   abs y  <        x  -> 4 * pow2 x - 3 * x - y
+         | -(abs y) >=       x  -> 4 * pow2 x -     x + y
+         | otherwise            -> -1
 
 
 -- | Create a square spiral template starting in the middle and going clock-wise

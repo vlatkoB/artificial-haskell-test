@@ -1,6 +1,9 @@
 # Changelog for artificial-haskell-test
 
 
+## 0.0.0.7
+  Only `--by-vector` speed improvements (102 ms -> 42.5 ms):
+
 ## 0.0.0.6
   Only `--by-vector` speed improvements (543 ms -> 102 ms):
 
